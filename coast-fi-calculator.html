@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Coast FI Calculator – KNI Services</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Coast FI calculator: find your Coast FI number, Coast FI age, and projected portfolio growth with full financial-modeling parameters.">
+  <style>
+    :root {
+      color-scheme: dark;
+      --page:          #0f172a;
+      --surface:       #020617;
+      --ink-primary:   #f1f5f9;
+      --ink-secondary: #cbd5e1;
+      --ink-muted:     #8b93a3;
+      --grid:          #1e293b;
+      --baseline:      #334155;
+      --accent:        #38bdf8;
+      --series-1:      #3987e5;  /* keep contributing */
+      --series-2:      #d95926;  /* coast from today */
+      --target:        #8b93a3;  /* FI target reference */
+      --good:          #0ca30c;
+      --warn:          #fab219;
+      --ring:          rgba(255,255,255,0.10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0; padding: 2rem; background: var(--page); color: var(--ink-primary);
+    }
+    .container { max-width: 1080px; margin: 0 auto; }
+    h1 { margin: 0 0 .25rem; font-size: 1.75rem; }
+    .sub { color: var(--ink-secondary); margin: 0 0 1.5rem; max-width: 64ch; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .card {
+      background: var(--surface); padding: 1.25rem 1.5rem; border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid var(--ring);
+    }
+    .layout { display: grid; grid-template-columns: 340px 1fr; gap: 1.25rem; align-items: start; }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+    /* ---- inputs ---- */
+    .inputs h2, .results h2 { font-size: 1rem; margin: 0 0 1rem; color: var(--ink-secondary);
+      text-transform: uppercase; letter-spacing: .06em; }
+    .field { margin-bottom: .9rem; }
+    .field label { display: flex; justify-content: space-between; font-size: .82rem;
+      color: var(--ink-secondary); margin-bottom: .3rem; gap: .5rem; }
+    .field label .hint { color: var(--ink-muted); font-weight: 400; text-align: right; }
+    .field .wrap { position: relative; }
+    .field input {
+      width: 100%; padding: .5rem .65rem; border-radius: 8px; font-size: .95rem;
+      border: 1px solid var(--baseline); background: #0b1120; color: var(--ink-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+    .field .unit { position: absolute; right: .65rem; top: 50%; transform: translateY(-50%);
+      color: var(--ink-muted); font-size: .82rem; pointer-events: none; }
+    .field input.has-unit { padding-right: 2.2rem; }
+    .group-rule { border: 0; border-top: 1px solid var(--grid); margin: 1.1rem 0; }
+    .error { color: #fca5a5; font-size: .85rem; margin-top: .5rem; display: none; }
+
+    /* ---- stat tiles ---- */
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .9rem; margin-bottom: 1.25rem; }
+    .tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: .85rem 1rem; }
+    .tile .k { font-size: .74rem; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .3rem; }
+    .tile .v { font-size: 1.45rem; font-weight: 650; line-height: 1.15; }
+    .tile .d { font-size: .78rem; color: var(--ink-secondary); margin-top: .25rem; }
+    .tile.status-good .v { color: var(--good); }
+    .verdict { font-size: .95rem; color: var(--ink-secondary); margin: 0 0 1.25rem; line-height: 1.5; }
+    .verdict strong { color: var(--ink-primary); }
+
+    /* ---- chart ---- */
+    .chart-card { margin-bottom: 1.25rem; }
+    .chart-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .5rem; }
+    .chart-head h3 { margin: 0; font-size: 1rem; }
+    .chart-controls { display: flex; gap: .5rem; align-items: center; }
+    .seg { display: inline-flex; border: 1px solid var(--baseline); border-radius: 8px; overflow: hidden; }
+    .seg button {
+      background: transparent; color: var(--ink-secondary); border: 0; padding: .35rem .7rem;
+      font-size: .8rem; cursor: pointer; font-family: inherit;
+    }
+    .seg button[aria-pressed="true"] { background: #1e293b; color: var(--ink-primary); }
+    .ghost-btn {
+      background: transparent; color: var(--ink-secondary); border: 1px solid var(--baseline);
+      border-radius: 8px; padding: .35rem .7rem; font-size: .8rem; cursor: pointer; font-family: inherit;
+    }
+    .ghost-btn:hover { color: var(--ink-primary); background: #1e293b; }
+    .legend { display: flex; flex-wrap: wrap; gap: 1rem; font-size: .8rem; color: var(--ink-secondary); margin-bottom: .35rem; }
+    .legend .item { display: inline-flex; align-items: center; gap: .4rem; }
+    .legend .swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+    .legend .swatch.dashed { background: repeating-linear-gradient(90deg, var(--target) 0 4px, transparent 4px 7px); height: 2px; }
+    #chart-wrap { position: relative; }
+    #chart svg { display: block; width: 100%; height: auto; }
+    #tooltip {
+      position: absolute; pointer-events: none; background: #0b1120; border: 1px solid var(--baseline);
+      border-radius: 8px; padding: .5rem .65rem; font-size: .78rem; color: var(--ink-secondary);
+      box-shadow: 0 6px 18px rgba(0,0,0,.55); display: none; min-width: 190px; z-index: 5;
+    }
+    #tooltip .t-age { color: var(--ink-primary); font-weight: 600; margin-bottom: .3rem; }
+    #tooltip .row { display: flex; justify-content: space-between; gap: 1rem; margin-top: .15rem; }
+    #tooltip .row .val { color: var(--ink-primary); font-variant-numeric: tabular-nums; }
+    #tooltip .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: .35rem; }
+    .chart-note { font-size: .76rem; color: var(--ink-muted); margin-top: .5rem; }
+
+    /* ---- table ---- */
+    #table-card { display: none; margin-bottom: 1.25rem; overflow-x: auto; }
+    #table-card table { border-collapse: collapse; width: 100%; font-size: .82rem; }
+    #table-card th, #table-card td { padding: .4rem .6rem; text-align: right; font-variant-numeric: tabular-nums; }
+    #table-card th { color: var(--ink-muted); font-weight: 600; border-bottom: 1px solid var(--baseline); }
+    #table-card td { border-bottom: 1px solid var(--grid); color: var(--ink-secondary); }
+    #table-card th:first-child, #table-card td:first-child { text-align: left; }
+    #table-card tr.coast-row td { color: var(--ink-primary); font-weight: 600; }
+
+    /* ---- explainer ---- */
+    .explainer { color: var(--ink-secondary); font-size: .9rem; line-height: 1.6; }
+    .explainer h3 { color: var(--ink-primary); font-size: 1rem; margin: 1rem 0 .4rem; }
+    .explainer p { margin: .4rem 0; }
+    .explainer code { background: #0b1120; border: 1px solid var(--grid); border-radius: 5px; padding: .1rem .35rem; font-size: .82rem; }
+    footer { margin-top: 2rem; font-size: .8rem; color: var(--ink-muted); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Coast FI Calculator</h1>
+    <p class="sub">Coast FI is the point where your investments, left alone, will grow into your full
+      retirement number by your target age — no further contributions required. Enter your numbers
+      below; everything is computed in your browser and nothing is saved or sent anywhere.</p>
+
+    <div class="layout">
+      <!-- ============ INPUTS ============ -->
+      <div class="card inputs">
+        <h2>Parameters</h2>
+
+        <div class="field">
+          <label for="in-age">Current age</label>
+          <div class="wrap"><input id="in-age" type="number" inputmode="decimal" min="10" max="90" step="1" value="35"></div>
+        </div>
+        <div class="field">
+          <label for="in-ret-age">Target retirement age</label>
+          <div class="wrap"><input id="in-ret-age" type="number" inputmode="decimal" min="20" max="100" step="1" value="65"></div>
+        </div>
+
+        <hr class="group-rule">
+
+        <div class="field">
+          <label for="in-portfolio">Current invested portfolio <span class="hint">today</span></label>
+          <div class="wrap"><input id="in-portfolio" class="has-unit" type="number" inputmode="decimal" min="0" step="1000" value="250000"><span class="unit">$</span></div>
+        </div>
+        <div class="field">
+          <label for="in-contrib">Monthly contribution</label>
+          <div class="wrap"><input id="in-contrib" class="has-unit" type="number" inputmode="decimal" min="0" step="100" value="2000"><span class="unit">$</span></div>
+        </div>
+        <div class="field">
+          <label for="in-contrib-growth">Annual contribution increase <span class="hint">raises, savings ramp</span></label>
+          <div class="wrap"><input id="in-contrib-growth" class="has-unit" type="number" inputmode="decimal" min="0" max="20" step="0.5" value="3"><span class="unit">%</span></div>
+        </div>
+
+        <hr class="group-rule">
+
+        <div class="field">
+          <label for="in-return">Expected annual return <span class="hint">nominal, pre-inflation</span></label>
+          <div class="wrap"><input id="in-return" class="has-unit" type="number" inputmode="decimal" min="-10" max="20" step="0.1" value="7"><span class="unit">%</span></div>
+        </div>
+        <div class="field">
+          <label for="in-inflation">Expected inflation</label>
+          <div class="wrap"><input id="in-inflation" class="has-unit" type="number" inputmode="decimal" min="0" max="15" step="0.1" value="3"><span class="unit">%</span></div>
+        </div>
+
+        <hr class="group-rule">
+
+        <div class="field">
+          <label for="in-spend">Annual retirement spending <span class="hint">today's dollars</span></label>
+          <div class="wrap"><input id="in-spend" class="has-unit" type="number" inputmode="decimal" min="0" step="1000" value="80000"><span class="unit">$</span></div>
+        </div>
+        <div class="field">
+          <label for="in-other-income">Other retirement income <span class="hint">pension, Social Security</span></label>
+          <div class="wrap"><input id="in-other-income" class="has-unit" type="number" inputmode="decimal" min="0" step="1000" value="0"><span class="unit">$</span></div>
+        </div>
+        <div class="field">
+          <label for="in-swr">Safe withdrawal rate</label>
+          <div class="wrap"><input id="in-swr" class="has-unit" type="number" inputmode="decimal" min="1" max="10" step="0.05" value="4"><span class="unit">%</span></div>
+        </div>
+
+        <p id="input-error" class="error"></p>
+      </div>
+
+      <!-- ============ RESULTS ============ -->
+      <div class="results">
+        <div class="tiles">
+          <div class="tile">
+            <div class="k">FI number</div>
+            <div class="v" id="out-fi">–</div>
+            <div class="d">portfolio needed at retirement (today's $)</div>
+          </div>
+          <div class="tile">
+            <div class="k">Coast FI number</div>
+            <div class="v" id="out-coast-num">–</div>
+            <div class="d">needed <em>today</em> to coast to FI</div>
+          </div>
+          <div class="tile" id="tile-progress">
+            <div class="k">Coast FI progress</div>
+            <div class="v" id="out-progress">–</div>
+            <div class="d" id="out-progress-d">of your Coast FI number</div>
+          </div>
+          <div class="tile" id="tile-coast-age">
+            <div class="k">Coast FI age</div>
+            <div class="v" id="out-coast-age">–</div>
+            <div class="d" id="out-coast-age-d">when you can stop contributing</div>
+          </div>
+        </div>
+
+        <p class="verdict" id="verdict"></p>
+
+        <div class="card chart-card">
+          <div class="chart-head">
+            <h3>Portfolio projection</h3>
+            <div class="chart-controls">
+              <div class="seg" role="group" aria-label="Dollar basis">
+                <button id="btn-real" aria-pressed="true">Today's $</button>
+                <button id="btn-nominal" aria-pressed="false">Future $</button>
+              </div>
+              <button class="ghost-btn" id="btn-table" aria-pressed="false">Table</button>
+            </div>
+          </div>
+          <div class="legend">
+            <span class="item"><span class="swatch" style="background:var(--series-1)"></span>Keep contributing</span>
+            <span class="item"><span class="swatch" style="background:var(--series-2)"></span>Coast from today</span>
+            <span class="item"><span class="swatch dashed"></span>FI target</span>
+          </div>
+          <div id="chart-wrap">
+            <div id="chart" role="img" aria-label="Line chart projecting portfolio value by age for two scenarios: continuing contributions versus coasting from today, against the FI target."></div>
+            <div id="tooltip"></div>
+          </div>
+          <p class="chart-note" id="chart-note"></p>
+        </div>
+
+        <div class="card" id="table-card">
+          <table>
+            <thead>
+              <tr><th>Age</th><th>Keep contributing</th><th>Coast from today</th><th>Coast FI number</th></tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+
+        <div class="card explainer">
+          <h3 style="margin-top:0">How this works</h3>
+          <p>Your <strong>FI number</strong> is the portfolio that supports your retirement spending:
+            <code>(spending − other income) ÷ safe withdrawal rate</code>, in today's dollars.</p>
+          <p>Your <strong>Coast FI number</strong> discounts that back to today at your
+            <em>real</em> (inflation-adjusted) return: <code>FI ÷ (1 + real return)<sup>years to retirement</sup></code>.
+            Once your portfolio crosses it, compounding alone carries you to FI by your target age.</p>
+          <p>The projection compounds annually with contributions credited mid-year, and grows your
+            contribution each year by the increase you set. "Today's $" deflates everything by your
+            inflation assumption so the numbers stay comparable to your current spending.</p>
+          <p>This is a planning model, not financial advice — real returns arrive in a volatile
+            sequence, not a smooth curve, so treat results as a directional estimate and stress-test
+            with lower return assumptions.</p>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <a href="./index.html">KNI Services</a> · All calculations run locally in your browser.
+    </footer>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- helpers ----------
+  const $ = (id) => document.getElementById(id);
+  const inputs = ["in-age","in-ret-age","in-portfolio","in-contrib","in-contrib-growth",
+                  "in-return","in-inflation","in-spend","in-other-income","in-swr"].map($);
+
+  const fmtFull = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  function fmtCompact(v) {
+    const a = Math.abs(v);
+    if (a >= 1e6) return "$" + (v / 1e6).toFixed(a >= 1e7 ? 0 : 1) + "M";
+    if (a >= 1e3) return "$" + Math.round(v / 1e3) + "K";
+    return "$" + Math.round(v);
+  }
+
+  function readParams() {
+    const num = (el) => parseFloat(el.value);
+    return {
+      age: num($("in-age")),
+      retAge: num($("in-ret-age")),
+      portfolio: num($("in-portfolio")),
+      monthlyContrib: num($("in-contrib")),
+      contribGrowth: num($("in-contrib-growth")) / 100,
+      nominalReturn: num($("in-return")) / 100,
+      inflation: num($("in-inflation")) / 100,
+      spend: num($("in-spend")),
+      otherIncome: num($("in-other-income")),
+      swr: num($("in-swr")) / 100,
+    };
+  }
+
+  function validate(p) {
+    if (Object.values(p).some((v) => !isFinite(v))) return "Please fill in every field with a number.";
+    if (p.retAge <= p.age) return "Target retirement age must be greater than current age.";
+    if (p.swr <= 0) return "Safe withdrawal rate must be greater than zero.";
+    if (p.retAge - p.age > 80) return "Please use a retirement horizon of 80 years or less.";
+    return null;
+  }
+
+  // ---------- model (all in today's dollars / real terms) ----------
+  function computeModel(p) {
+    const years = Math.round(p.retAge - p.age);
+    const realR = (1 + p.nominalReturn) / (1 + p.inflation) - 1;
+    const realContribGrowth = (1 + p.contribGrowth) / (1 + p.inflation) - 1;
+    const netSpend = Math.max(0, p.spend - p.otherIncome);
+    const fiNumber = netSpend / p.swr;
+
+    const ages = [], contribPath = [], coastPath = [], coastNumberPath = [];
+    let bal = p.portfolio, coastBal = p.portfolio;
+    const annualContrib0 = p.monthlyContrib * 12;
+    const growthHalf = Math.sqrt(Math.max(0, 1 + realR)); // mid-year crediting
+
+    for (let t = 0; t <= years; t++) {
+      const age = p.age + t;
+      ages.push(age);
+      contribPath.push(bal);
+      coastPath.push(coastBal);
+      coastNumberPath.push(fiNumber / Math.pow(1 + realR, years - t));
+      if (t < years) {
+        const c = annualContrib0 * Math.pow(1 + realContribGrowth, t);
+        bal = bal * (1 + realR) + c * growthHalf;
+        coastBal = coastBal * (1 + realR);
+      }
+    }
+
+    // Coast FI age: first age where the contributing path meets that age's coast number
+    let coastIdx = -1;
+    for (let i = 0; i <= years; i++) {
+      if (contribPath[i] >= coastNumberPath[i] - 1e-9) { coastIdx = i; break; }
+    }
+    let coastAge = null;
+    if (coastIdx === 0) coastAge = p.age;              // already there
+    else if (coastIdx > 0) {                            // interpolate within the crossing year
+      const gapPrev = coastNumberPath[coastIdx - 1] - contribPath[coastIdx - 1];
+      const gapNow  = contribPath[coastIdx] - coastNumberPath[coastIdx];
+      const f = gapPrev + gapNow > 0 ? gapPrev / (gapPrev + gapNow) : 0;
+      coastAge = ages[coastIdx - 1] + f;
+    }
+
+    return {
+      years, realR, fiNumber, ages,
+      contribPath, coastPath, coastNumberPath,
+      coastNumberToday: coastNumberPath[0],
+      progress: coastNumberPath[0] > 0 ? p.portfolio / coastNumberPath[0] : 1,
+      coastIdx, coastAge,
+      valueAtRetContrib: contribPath[years],
+      valueAtRetCoast: coastPath[years],
+      inflation: p.inflation,
+      baseAge: p.age,
+    };
+  }
+
+  // ---------- results ----------
+  function renderResults(p, m) {
+    $("out-fi").textContent = fmtCompact(m.fiNumber);
+    $("out-coast-num").textContent = fmtCompact(m.coastNumberToday);
+    $("out-progress").textContent = (m.progress * 100).toFixed(0) + "%";
+
+    const tileProg = $("tile-progress"), tileAge = $("tile-coast-age");
+    tileProg.classList.toggle("status-good", m.progress >= 1);
+    tileAge.classList.toggle("status-good", m.coastAge !== null && m.coastAge <= m.baseAge);
+
+    const v = $("verdict");
+    if (m.progress >= 1) {
+      $("out-coast-age").textContent = "Reached";
+      $("out-coast-age-d").textContent = "you can already coast";
+      v.innerHTML = `<strong>You've reached Coast FI.</strong> At a real return of ` +
+        `${(m.realR * 100).toFixed(1)}%, your current portfolio alone is projected to grow to ` +
+        `<strong>${fmtFull.format(Math.round(m.valueAtRetCoast))}</strong> (today's dollars) by age ` +
+        `${p.retAge} — at or above your FI number of ${fmtFull.format(Math.round(m.fiNumber))}. ` +
+        `Contributions from here accelerate the date or raise your retirement spending power.`;
+    } else if (m.coastAge !== null) {
+      const yrs = m.coastAge - m.baseAge;
+      $("out-coast-age").textContent = m.coastAge.toFixed(1);
+      $("out-coast-age-d").textContent = `in ~${yrs.toFixed(1)} years at this savings rate`;
+      const shortToday = m.coastNumberToday - p.portfolio;
+      v.innerHTML = `You're <strong>${(m.progress * 100).toFixed(0)}%</strong> of the way to Coast FI. ` +
+        `You'd need <strong>${fmtFull.format(Math.round(shortToday))}</strong> more invested today to coast now — ` +
+        `or keep contributing and you're projected to hit Coast FI around age <strong>${m.coastAge.toFixed(1)}</strong>, ` +
+        `after which no further savings would be needed to reach ${fmtFull.format(Math.round(m.fiNumber))} by age ${p.retAge}.`;
+    } else {
+      $("out-coast-age").textContent = "—";
+      $("out-coast-age-d").textContent = "not reached before retirement";
+      const shortfall = m.fiNumber - m.valueAtRetContrib;
+      v.innerHTML = `At these assumptions the plan doesn't reach Coast FI before age ${p.retAge}: ` +
+        `the contributing path is projected to end ` +
+        `<strong>${fmtFull.format(Math.round(shortfall))}</strong> short of your FI number (today's dollars). ` +
+        `Consider higher contributions, a later retirement age, lower spending, or revisiting return assumptions.`;
+    }
+  }
+
+  // ---------- chart ----------
+  let displayMode = "real"; // "real" | "nominal"
+  let currentModel = null, currentParams = null;
+  let chartGeom = null;
+
+  function seriesForDisplay(m) {
+    const infl = (t) => Math.pow(1 + m.inflation, t);
+    const map = (arr) => displayMode === "real" ? arr : arr.map((v, i) => v * infl(i));
+    return {
+      contrib: map(m.contribPath),
+      coast: map(m.coastPath),
+      target: m.ages.map((_, i) =>
+        displayMode === "real" ? m.fiNumber : m.fiNumber * infl(i)),
+    };
+  }
+
+  function renderChart(m) {
+    const host = $("chart");
+    const W = Math.max(320, host.clientWidth || 640), H = 340;
+    const M = { top: 16, right: 118, bottom: 30, left: 56 };
+    const iw = W - M.left - M.right, ih = H - M.top - M.bottom;
+    const s = seriesForDisplay(m);
+    const n = m.ages.length;
+
+    const yMax = Math.max(...s.contrib, ...s.coast, ...s.target) * 1.06;
+    const x = (i) => M.left + (n === 1 ? 0 : (i / (n - 1)) * iw);
+    const y = (v) => M.top + ih - (v / yMax) * ih;
+
+    // y ticks: 5 nice steps
+    const rawStep = yMax / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const step = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((k) => k >= rawStep) || rawStep;
+    const yTicks = [];
+    for (let v = 0; v <= yMax; v += step) yTicks.push(v);
+
+    // x ticks: every 5 years of age (or fewer if short horizon)
+    const xTickEvery = m.years > 25 ? 10 : m.years > 12 ? 5 : m.years > 6 ? 2 : 1;
+    const xTicks = m.ages.filter((a) => (a - m.ages[0]) % xTickEvery === 0);
+
+    const path = (arr) => arr.map((v, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1)).join(" ");
+
+    let g = "";
+    // gridlines + y labels
+    for (const v of yTicks) {
+      g += `<line x1="${M.left}" x2="${M.left + iw}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
+      g += `<text x="${M.left - 8}" y="${y(v) + 4}" text-anchor="end" fill="var(--ink-muted)" font-size="11" style="font-variant-numeric:tabular-nums">${fmtCompact(v)}</text>`;
+    }
+    // baseline + x labels
+    g += `<line x1="${M.left}" x2="${M.left + iw}" y1="${y(0)}" y2="${y(0)}" stroke="var(--baseline)" stroke-width="1"/>`;
+    for (const a of xTicks) {
+      const i = a - m.ages[0];
+      g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" fill="var(--ink-muted)" font-size="11">${a}</text>`;
+    }
+    g += `<text x="${M.left + iw / 2}" y="${H - 8}" dy="0" text-anchor="middle" fill="var(--ink-muted)" font-size="0"></text>`;
+
+    // FI target (dashed reference)
+    g += `<path d="${path(s.target)}" fill="none" stroke="var(--target)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+
+    // Coast FI age marker
+    if (m.coastAge !== null && m.coastAge > m.baseAge && m.coastAge < m.ages[n - 1]) {
+      const xi = M.left + ((m.coastAge - m.baseAge) / (m.years)) * iw;
+      g += `<line x1="${xi}" x2="${xi}" y1="${M.top}" y2="${M.top + ih}" stroke="var(--ink-muted)" stroke-width="1" stroke-dasharray="2 3" opacity="0.7"/>`;
+      g += `<text x="${xi}" y="${M.top - 4}" text-anchor="middle" fill="var(--ink-secondary)" font-size="11">Coast FI ${m.coastAge.toFixed(1)}</text>`;
+    }
+
+    // series lines (thin marks, 2px)
+    g += `<path d="${path(s.coast)}" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round"/>`;
+    g += `<path d="${path(s.contrib)}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round"/>`;
+
+    // direct labels at line ends (text in ink, mark carries color via dot)
+    const endLabel = (arr, color, label) => {
+      const yy = y(arr[n - 1]);
+      return `<circle cx="${x(n - 1)}" cy="${yy}" r="3.5" fill="${color}" stroke="var(--surface)" stroke-width="2"/>` +
+             `<text x="${x(n - 1) + 9}" y="${yy + 4}" fill="var(--ink-secondary)" font-size="11">${label}</text>`;
+    };
+    // separate labels vertically if they collide
+    let y1 = y(s.contrib[n - 1]), y2 = y(s.coast[n - 1]);
+    if (Math.abs(y1 - y2) < 14) { const mid = (y1 + y2) / 2; y1 = mid - 7; y2 = mid + 7; }
+    g += `<circle cx="${x(n-1)}" cy="${y(s.contrib[n-1])}" r="3.5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>`;
+    g += `<text x="${x(n-1)+9}" y="${y1+4}" fill="var(--ink-secondary)" font-size="11">Contributing</text>`;
+    g += `<circle cx="${x(n-1)}" cy="${y(s.coast[n-1])}" r="3.5" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>`;
+    g += `<text x="${x(n-1)+9}" y="${y2+4}" fill="var(--ink-secondary)" font-size="11">Coasting</text>`;
+    const yT = y(s.target[n - 1]);
+    g += `<text x="${x(n-1)+9}" y="${Math.min(yT+4, Math.min(y1,y2)-12)}" fill="var(--ink-muted)" font-size="11">FI target</text>`;
+
+    // crosshair layer (populated on hover)
+    g += `<g id="crosshair" style="display:none">
+            <line id="ch-line" y1="${M.top}" y2="${M.top + ih}" stroke="var(--ink-muted)" stroke-width="1" opacity="0.6"/>
+            <circle id="ch-d1" r="4" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2"/>
+            <circle id="ch-d2" r="4" fill="var(--series-2)" stroke="var(--surface)" stroke-width="2"/>
+          </g>`;
+    // hover capture rect
+    g += `<rect id="hover-rect" x="${M.left}" y="${M.top}" width="${iw}" height="${ih}" fill="transparent"/>`;
+
+    host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${g}</svg>`;
+    chartGeom = { W, H, M, iw, ih, x, y, n, s };
+    bindHover(m);
+
+    $("chart-note").textContent = displayMode === "real"
+      ? "Values in today's dollars (deflated at your inflation assumption). FI target stays flat in real terms."
+      : "Values in future (nominal) dollars. The FI target rises with inflation.";
+  }
+
+  function bindHover(m) {
+    const svg = $("chart").querySelector("svg");
+    const rect = svg.querySelector("#hover-rect");
+    const ch = svg.querySelector("#crosshair");
+    const tip = $("tooltip");
+    const { M, iw, x, y, n, s } = chartGeom;
+
+    function onMove(evt) {
+      const pt = svg.createSVGPoint();
+      const e = evt.touches ? evt.touches[0] : evt;
+      pt.x = e.clientX; pt.y = e.clientY;
+      const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+      let i = Math.round(((loc.x - M.left) / iw) * (n - 1));
+      i = Math.max(0, Math.min(n - 1, i));
+
+      ch.style.display = "";
+      const xi = x(i);
+      svg.querySelector("#ch-line").setAttribute("x1", xi);
+      svg.querySelector("#ch-line").setAttribute("x2", xi);
+      svg.querySelector("#ch-d1").setAttribute("cx", xi);
+      svg.querySelector("#ch-d1").setAttribute("cy", y(s.contrib[i]));
+      svg.querySelector("#ch-d2").setAttribute("cx", xi);
+      svg.querySelector("#ch-d2").setAttribute("cy", y(s.coast[i]));
+
+      tip.innerHTML =
+        `<div class="t-age">Age ${m.ages[i]}</div>` +
+        `<div class="row"><span><span class="dot" style="background:var(--series-1)"></span>Contributing</span><span class="val">${fmtFull.format(Math.round(s.contrib[i]))}</span></div>` +
+        `<div class="row"><span><span class="dot" style="background:var(--series-2)"></span>Coasting</span><span class="val">${fmtFull.format(Math.round(s.coast[i]))}</span></div>` +
+        `<div class="row"><span>FI target</span><span class="val">${fmtFull.format(Math.round(s.target[i]))}</span></div>`;
+      tip.style.display = "block";
+
+      const wrap = $("chart-wrap").getBoundingClientRect();
+      const frac = xi / chartGeom.W;
+      const px = frac * wrap.width;
+      tip.style.left = (px + (frac > 0.6 ? -tip.offsetWidth - 14 : 14)) + "px";
+      tip.style.top = Math.max(0, (loc.y / chartGeom.H) * wrap.height - 30) + "px";
+    }
+    function onLeave() { ch.style.display = "none"; tip.style.display = "none"; }
+
+    rect.addEventListener("mousemove", onMove);
+    rect.addEventListener("touchstart", onMove, { passive: true });
+    rect.addEventListener("touchmove", onMove, { passive: true });
+    rect.addEventListener("mouseleave", onLeave);
+    rect.addEventListener("touchend", onLeave);
+  }
+
+  // ---------- table ----------
+  function renderTable(m) {
+    const s = seriesForDisplay(m);
+    const rows = m.ages.map((a, i) => {
+      const coastNum = displayMode === "real"
+        ? m.coastNumberPath[i]
+        : m.coastNumberPath[i] * Math.pow(1 + m.inflation, i);
+      const isCoastRow = m.coastAge !== null && Math.abs(a - Math.round(m.coastAge)) < 0.5 && m.coastAge > m.baseAge;
+      return `<tr${isCoastRow ? ' class="coast-row"' : ""}>` +
+        `<td>${a}</td><td>${fmtFull.format(Math.round(s.contrib[i]))}</td>` +
+        `<td>${fmtFull.format(Math.round(s.coast[i]))}</td>` +
+        `<td>${fmtFull.format(Math.round(coastNum))}</td></tr>`;
+    });
+    $("table-body").innerHTML = rows.join("");
+  }
+
+  // ---------- wiring ----------
+  function recalc() {
+    const p = readParams();
+    const err = validate(p);
+    const errEl = $("input-error");
+    if (err) { errEl.textContent = err; errEl.style.display = "block"; return; }
+    errEl.style.display = "none";
+    currentParams = p;
+    currentModel = computeModel(p);
+    renderResults(p, currentModel);
+    renderChart(currentModel);
+    renderTable(currentModel);
+  }
+
+  inputs.forEach((el) => el.addEventListener("input", recalc));
+
+  $("btn-real").addEventListener("click", () => setMode("real"));
+  $("btn-nominal").addEventListener("click", () => setMode("nominal"));
+  function setMode(mode) {
+    displayMode = mode;
+    $("btn-real").setAttribute("aria-pressed", String(mode === "real"));
+    $("btn-nominal").setAttribute("aria-pressed", String(mode === "nominal"));
+    if (currentModel) { renderChart(currentModel); renderTable(currentModel); }
+  }
+
+  $("btn-table").addEventListener("click", () => {
+    const card = $("table-card");
+    const show = card.style.display !== "block";
+    card.style.display = show ? "block" : "none";
+    $("btn-table").setAttribute("aria-pressed", String(show));
+  });
+
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { if (currentModel) renderChart(currentModel); }, 120);
+  });
+
+  recalc();
+})();
+</script>
+</body>
+</html>
